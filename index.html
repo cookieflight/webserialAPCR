@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSerial Test</title>
+    <script type="module" src="app.js"></script>
+<script type="module">
+    import { Flasher, SamBA, Device } from "./bossa/bossa-web.js";
+    window.Flasher = Flasher;
+    window.SamBA = SamBA;
+	window.Device = Device;
+
+    import { ESPLoader } from "https://unpkg.com/esptool-js/bundle.js";
+    window.ESPLoader = ESPLoader;
+
+</script>
+
+
+
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f4; margin: 0; padding: 0; }
+        .container { width: 50%; margin: 20px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        button { margin: 10px; padding: 10px 20px; font-size: 16px; border: none; background: #007bff; color: white; cursor: pointer; border-radius: 5px; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        pre { text-align: left; margin: 10px auto; width: 80%; background: #f8f9fa; padding: 10px; border: 1px solid #ddd; height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSerial APC-R</h1>
+		<button id="check" >Check Device</button>
+		<button id="flash" >Force Update ESPtool</button>
+		<button id="update" >Force Update Standard</button>
+		<!-- <button id="flash-esp">Flasher ESP</button> -->
+		<div>
+    <h3>Etape 1</h3>
+    <div id="progress-bossa-container" style="width: 100%; background-color: #ddd;">
+        <div id="progress-step-1" style="width: 0%; height: 20px; background-color: #4CAF50;"></div>
+    </div>
+</div>
+
+<div>
+    <h3>Etape 2 - ESPTool</h3>
+    <div id="progress-esp-container" style="width: 100%; background-color: #ddd;">
+        <div id="progress-esp" style="width: 0%; height: 20px; background-color: #2196F3;"></div>
+    </div>
+</div>
+
+<div>
+    <h3>Etape 3</h3>
+    <div id="progress-esp-container" style="width: 100%; background-color: #ddd;">
+        <div id="progress-step-3" style="width: 0%; height: 20px; background-color: #2196F3;"></div>
+    </div>
+</div>
+
+<pre id="flash-log">⚡ En attente du flash...</pre>
+    </div>
+</body>
+</html>
