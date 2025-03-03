@@ -18,7 +18,7 @@ import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.5.4/bundle.
 //APCR
 //VID: A380
 //PID: F085
-//
+
 
 // ✅ Machine d'état
 let updateState = "IDLE";
