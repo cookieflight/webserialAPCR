@@ -18,7 +18,7 @@ import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.5.4/bundle.
 //APCR
 //VID: A380
 //PID: F085
-
+//
 
 // ✅ Machine d'état
 let updateState = "IDLE";
@@ -29,10 +29,11 @@ document.getElementById("flash").addEventListener("click", () => {
     nextStep();
 });
 
+/*
 document.getElementById("update").addEventListener("click", () => {
     updateState = "UPDATE_ESPTOOL";
     nextStep();
-});
+});*/
 
 document.getElementById("check").addEventListener("click", () => {
      getAPCRsn();
@@ -40,9 +41,9 @@ document.getElementById("check").addEventListener("click", () => {
 
 
 const updateButton = document.getElementById("flash");
-const forceButton = document.getElementById("update");
+//const forceButton = document.getElementById("update");
 updateButton.style.backgroundColor = "grey";
-forceButton.style.backgroundColor = "grey";
+//forceButton.style.backgroundColor = "grey";
 
 window.addEventListener("DOMContentLoaded", () => {
     if (!isWebSerialSupported()) {
@@ -74,27 +75,27 @@ async function nextStep() {
 			updateProgress("progress-step-3", 0); 
 
 			await initflashbossa();
-            //await performFlashBossa("passthroughESP32-115200.bin");
             break;
 
         case "UPDATE_STEP_1":
             log("✅ Étape 1 terminée. Passage à l'update ESP...");
             updateState = "UPDATE_ESPTOOL";
             await flashESP();
+			updateButton.disabled = true;
             break;
 
         case "UPDATE_ESPTOOL":
             log("✅ Étape 2 terminée. Passage à l'update BOSSA finale...");
             updateState = "UPDATE_STEP_3";
-            //await performFlashBossa("firmware-final.bin");
 			await initflashbossa();
             break;
 
         case "UPDATE_STEP_3":
             log("🎉 Mise à jour complète !");
             updateState = "IDLE";
-			//await closeSerialPort(portAPCR);
-			sendNAMECommandsAndDisconnect();
+			await sendNAMECommandsAndDisconnect();
+			updateButton.disabled = false;
+			window.prompt("Updated! Please unplug your device.");
             break;
     }
 }
@@ -107,43 +108,90 @@ function updateProgress(barId, percent) {
     }
 }
 
+async function forceUpdateWithSN(){
+	
+ let serialNumber = window.prompt("L'appareil est en mode bootloader. Veuillez entrer son numéro de série :", "");
+					
+					if (serialNumber && serialNumber.trim() !== "") {
+						log(`✅ Numéro de série entré : ${serialNumber}`);
+						apcrproductNumber = serialNumber;
+						updateState = "UPDATE_ESPTOOL";
+						nextStep();
+	
+					} else {
+						log("❌ Aucun numéro de série saisi.");
+						return null;
+					}	
+}
+
+
+
+
 async function getAPCRsn(){
 	log(`🟡 Demande de connexion ..`);
+	closeSerialPort(portSN);
 	
     try {
+        
         
         portSN = await navigator.serial.requestPort();
 			 const info = await portSN.getInfo();
 			let targetPid = info.usbProductId;
 			let targetVid = info.usbVendorId;
             console.log(`✅ Périphérique détecté (VID: ${targetVid}, PID: ${targetPid})`);
-            if (targetPid === 0x000B) 
+			
+			
+			if( targetVid === 0x239A && targetPid === 0x800B){
+					await forceUpdateWithSN();
+			}
+            else if (targetPid === 0x000B) 
 			{
-				/*
+				
 				 log("In bootlader mode.. should reset");
-				  samba = new SamBA(portSN);
+				
 				try {
 					 log("samba connect");
+					   samba = new SamBA(portSN);
 						await samba.connect();
 					//log("samba connect2");
 						var dev = new Device(samba);
 						await dev.create();
 						await dev.reset();
 						await sleep(1500);
-					log("reset device");
-				//exitBootloader();
-				//getAPCRsn();
+					  log("reset device");
+					  
+					  
+					   const info = await portSN.getInfo();
+						let targetPid = info.usbProductId;
+						let targetVid = info.usbVendorId;
+						console.log(`✅ Périphérique détecté (VID: ${targetVid}, PID: ${targetPid})`);
+						if (targetPid === 0x000B) 
+						{
+						await forceUpdateWithSN();
+						}
+						else 
+							{
+						console.log(`✅ Reset OK, click again CheckDevice`);
+						}
 				return;
 				}
 				  catch (err) {
 					log("❌ Erreur de connexion : " + err);
-				}*/
-				 log("In bootlader mode.. should force update");
+					await forceUpdateWithSN();
+				}
+				// log("In bootlader mode.. should force update");
+				//await forceUpdateWithSN()	
+		
 			}
 			else
 			{	  
+		
+		
+		await closeSerialPort(portSN);
+		
 		 log("Connecting");
-         await portSN.open({ baudRate: 115200 }); // ✅ Utilisation du baudrate en argument
+        // await portSN.open({ baudRate: 115200 }); // ✅ Utilisation du baudrate en argument
+		await openSerialPort(portSN, 115200);  
         portAPCR = portSN;
         log("✅ Connexion réussie !");
 
@@ -155,7 +203,8 @@ async function getAPCRsn(){
 		startReading();
         startWriting();
 		}
-       // readSerialData(); // Lance la lecture des données
+   
+   
     } catch (err) {
         log("❌ Erreur de connexion : " + err);
     }
@@ -164,9 +213,18 @@ async function getAPCRsn(){
 
 let serialBuffer = ""; // Buffer temporaire pour stocker les données incomplètes
 
+
+
 async function startReading() {
     try {
         while (keepreading) {
+			
+			  if (!reader) {
+                console.warn("⚠️ Pas de lecteur disponible !");
+                return;
+            }
+
+
             const { value, done } = await reader.read();
             if (done) break;
 
@@ -185,15 +243,17 @@ async function startReading() {
 }
 
 function processSerialData(data) {
-   // log("📥 Trame complète reçue : " + data);
+  
+  //log("📥 Trame complète reçue : " + data);
 
     const parts = data.split("|");
     if (parts.length >= 5) {
         const serialNumber = parts[4]; // 🔥 Extraire la valeur
-		 apcrproductNumber = parts[0]; // 🔥 `APCR-2904`
-        if (isValidSerialNumber(serialNumber)) {
+		 apcrproductNumber = parts[1]; // 🔥 `APCR-2904`
+        if (isValidSerialNumber(serialNumber) && isValidProduct(apcrproductNumber)) {
             log(`✅ Numéro de série valide : ${serialNumber} pour  ${apcrproductNumber}` );
-			// updateButton.disabled = false;
+			 updateButton.hidden = false;
+			 updateButton.disabled = false;
 			 updateButton.textContent = "OK update to 1.5.21"
 			 updateButton.style.backgroundColor = "blue";
         } else {
@@ -204,6 +264,11 @@ function processSerialData(data) {
     }
 }
 
+function isValidProduct(pn) {
+	
+    return /^APCR/.test(pn);
+
+}
 
 function isValidSerialNumber(serial) {
     const regex = /^1\.5\.(\d{2})$/; // 🔍 Vérifie le format "1.5.XX"
@@ -222,14 +287,51 @@ function isValidSerialNumber(serial) {
 async function startWriting() {
     try {
         while (keepreading) {
+			
+			 if (!writer) {
+                console.warn("⚠️ Pas d'écrivain disponible !");
+                return;
+            }
+			
             await writer.write(new TextEncoder().encode("#?\n"));
-           // log("📤 PING envoyé");
+            //log("📤 PING envoyé");
             await sleep(2000); // 🔥 Attente 5s avant le prochain envoi
         }
     } catch (err) {
         log("❌ Erreur d'écriture : " + err);
     }
 }
+
+
+
+
+
+
+
+async function openSerialPort(port, baudRate = 115200) {
+    if (!port) {
+        console.warn("⚠️ Aucun port disponible !");
+        return null;
+    }
+
+    try {
+        if (port.readable || port.writable) {
+            console.log("⚠️ Port déjà ouvert !");
+            return port;  // Retourne le port s'il est déjà ouvert
+        }
+
+        console.log(`🔌 Ouverture du port avec baudrate: ${baudRate}...`);
+        await port.open({ baudRate });
+
+        console.log("✅ Port série ouvert !");
+        return port;
+    } catch (err) {
+        console.error("❌ Erreur lors de l'ouverture du port :", err);
+        return null;
+    }
+}
+
+
 
 async function closeSerialPort(port) {
     if (!port) {
@@ -238,38 +340,59 @@ async function closeSerialPort(port) {
     }
 
     try {
-        if (reader) {
-            console.log("📌 Libération du lecteur...");
-            await reader.cancel(); // 🔥 Annuler la lecture active
-            reader.releaseLock();  // 🔓 Libérer le lecteur
-        }
+	
+	 if (port.readable || port.writable) { 
+			if (reader) {
+				console.log("📌 Libération du lecteur...");
+				await reader.cancel(); // 🔥 Annuler la lecture active
+				reader.releaseLock();  // 🔓 Libérer le lecteur
+			}
 
-        if (writer) {
-            console.log("📌 Libération de l'écrivain...");
-            writer.releaseLock();  // 🔓 Libérer l'écrivain
-        }
-
-        console.log("🔌 Fermeture du port...");
-        await port.close(); // 🔥 Fermer proprement
-        console.log("✅ Port série fermé !");
+			if (writer) {
+				console.log("📌 Libération de l'écrivain...");
+				writer.releaseLock();  // 🔓 Libérer l'écrivain
+			}
+	
+			console.log("🔌 Fermeture du port...");
+			await port.close(); // 🔥 Fermer proprement
+			console.log("✅ Port série fermé !");
+		
+		}
+		else {
+			console.log("✅ Port série déjà fermé !");
+			}
     } catch (err) {
         console.error("❌ Erreur lors de la fermeture du port :", err);
     }
 }
 
 
+
+
+
+
+
+
+
+
+
+
 async function sendNAMECommandsAndDisconnect() {
 	  console.log("✅ sendNAMECommandsAndDisconnect");
 	  
+	  /*
 	  try {
 		console.log("🔌 Fermeture du port...");
         await portAPCR.close(); // 🔥 Fermer proprement
         console.log("✅ Port série fermé !");
     } catch (err) {
         console.error("❌ Erreur lors de la fermeture du port :", err);
-    }
-	  await sleep(500);
+    }*/
+	
 	  
+	  	await closeSerialPort(portAPCR);
+		await sleep(500);
+		
     try {
    
     const ports = await navigator.serial.getPorts();
@@ -281,8 +404,9 @@ async function sendNAMECommandsAndDisconnect() {
 			portAPCR = port
 			}
 			}
-			
-        await portAPCR.open({ baudRate: 115200 });
+	
+        //await portAPCR.open({ baudRate: 115200 });
+		await openSerialPort(portAPCR, 115200);
         console.log("✅ Port série connecté !");
         
         const writer = portAPCR.writable.getWriter(); // ✅ Ouvre un flux d'écriture
@@ -298,13 +422,13 @@ async function sendNAMECommandsAndDisconnect() {
         for (const cmd of commands) {
             console.log(`📤 Envoi :  ${apcrproductNumber}`);
             await writer.write(new TextEncoder().encode(cmd));
-            await sleep(500); // ⏳ Pause de 500ms entre chaque commande
+            await sleep(1000); // ⏳ Pause de 500ms entre chaque commande
         }
         
         writer.releaseLock(); // ✅ Libère l'écriture
         await portAPCR.close(); // ✅ Ferme le port proprement
         console.log("🔌 Port série fermé !");
-        
+		
     } catch (err) {
         console.error("❌ Erreur série :", err);
     }
@@ -344,7 +468,8 @@ async function initflashbossa() {
                 log("🔄 Passage en mode bootloader...");
                 
                 try {
-                    await port.open({ baudRate: 1200 });
+                    //await port.open({ baudRate: 1200 });
+					await openSerialPort(port, 1200); 
                     await sleep(100);
                     await port.close();
                     log("✅ Port fermé, attente du reboot...");
@@ -381,17 +506,32 @@ async function initflashbossa() {
     const info = await event.target.getInfo();
     console.log(`📍 Détecté : VID ${info.usbVendorId}, PID ${info.usbProductId}`);
     
+	
+		portAPCR = await openSerialPort(event.target, 115200);  
+   
+		   
+	   // Vérifier si l'ouverture du port a réussi avant d'accéder à readable / writable
+		if (!portAPCR) {
+			console.error("❌ Impossible d'ouvrir le port !");
+			return;
+		}
+		
+		 log("✅ Connexion réussie !");
+		keepreading = true;		
+		reader = portAPCR.readable.getReader();
+        writer = portAPCR.writable.getWriter();
+		
+		startReading();
+        startWriting();
 
 });
 
+
+
+
 navigator.serial.addEventListener("disconnect", (event) => {
     console.log("❌ Appareil déconnecté :", event.target);
-	
-	if( updateState === "IDLE"){
-		// updateButton.disabled = true;
-		 updateButton.textContent = "Force Update ESPtool"
-		 updateButton.style.backgroundColor = "grey";
-			} 
+	updateButton.hidden = true;
 });
 
 
@@ -673,43 +813,6 @@ updateProgress("progress-esp", 0); // ✅ Réinitialiser la barre ESPTool
         }
         log("🔌 Port série fermé.");
     }
-}
-
-async function exitBootloader() {
-    log("🔄 Tentative de sortie du mode bootloader...");
-
-    const ports = await navigator.serial.getPorts();
-    for (const port of ports) {
-        const info = await port.getInfo();
-        if (info.usbVendorId === 0x239A && info.usbProductId === 0x000B) {
-            try {
-                log("⚡ Forcer un reset via DTR/RTS...");
-			
-                await port.open({ baudRate: 1200, dataBits: 8, stopBits: 1, parity: "none" });
-
-                const writer = port.writable.getWriter();
-                const resetSignal = new Uint8Array([0x00]); // Écriture d'une valeur minimale
-                await writer.write(resetSignal);
-                writer.releaseLock();
-
-                // ⚡ Manipulation de DTR et RTS
-                const signals = await port.getSignals();
-                await port.setSignals({ dtr: false, rts: true });
-                await sleep(100);
-                await port.setSignals({ dtr: true, rts: false });
-
-                await sleep(500);
-                await port.close();
-
-                log("✅ Port fermé, attente du reboot...");
-                await sleep(2000); // Laisser l'Arduino redémarrer
-                return;
-            } catch (err) {
-                log("❌ Erreur lors du reset via DTR/RTS : " + err);
-            }
-        }
-    }
-    log("❌ Aucun périphérique en bootloader trouvé.");
 }
 
 
